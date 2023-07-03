@@ -1,0 +1,252 @@
+---
+title: "CapstoneMA1580"
+author: "Sally Pang Shue Yan"
+date: '2023-01-24'
+output: html_document
+---
+
+#### Load Data
+
+```{r}
+data <- read.csv("/Users/sallypang/Library/CloudStorage/OneDrive-JamesCookUniversity/MA 1580/MA 1580 - Assignment02/loan_data.csv")
+data = data.frame(data)
+head(data)
+```
+
+#### Install Packages
+```{r}
+library(readxl)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+library(ggplot2)
+library(DataExplorer)
+library(corrplot)
+library(caTools)
+library(ggbiplot)
+```
+
+#### Data Preparation & Transformation
+
+```{r}
+dim(data) # display number of observations and variables 
+```
+
+#### Data descriptions
+
+```{r}
+Field <- c("credit.policy", "purpose", "int.rate", 
+           "installment", "log.annual.inc", "dti", 
+           "fico", "days.with.cr.line", "revol.bal", 
+           "revol.util", "inq.last.6mths",
+           "delinq.2yrs", "pub.rec", "not.fully.paid")
+
+Description <- c("1 if the customer meets the credit underwriting criteria of LendingClub.com, and 0 otherwise.",
+                 "The purpose of the loan (takes values 'credit_card', 'debt_consolidation', 'educational', 'major_purchase', 'small_business', and 'all_other').", 
+                 "The interest rate of the loan, as a proportion (a rate of 11% would be stored as 0.11). Borrowers judged by LendingClub.com to be more risky are assigned higher interest rates.", 
+                 "The monthly installments owed by the borrower if the loan is funded.", 
+                 "The natural log of the self-reported annual income of the borrower.", 
+                 "The debt-to-income ratio of the borrower (amount of debt divided by annual income).",
+                 "The FICO credit score of the borrower.",
+                 "The number of days the borrower has had a credit line.", 
+                 "The borrower's revolving balance (amount unpaid at the end of the credit card billing cycle).",
+                 "The borrower's revolving line utilization rate (the amount of the credit line used relative to total credit available).", 
+                 "The borrower's number of inquiries by creditors in the last 6 months.", 
+                 "The number of times the borrower had been 30+ days past due on a payment in the past 2 years.", 
+                 "The borrower's number of derogatory public records (bankruptcy filings, tax liens, or judgments).", "not fully paid.")
+
+VariableType <- c("Qualitative",   "Qualitative",  "Quantitative",  "Quantitative",  
+                  "Quantitative",    "Quantitative",  "Quantitative", "Quantitative", 
+                  "Quantitative",   "Quantitative", "Qualitative", "Qualitative", 
+                  "Qualitative",   "Qualitative") 
+
+VariableMeasure <- c("Explanatory", "Explanatory",  "Response",  "Explanatory",  
+                     "Explanatory", "Explanatory",  "Explanatory",  "Explanatory", 
+                     "Independent", "Explanatory",  "Explanatory",  "Explanatory",  
+                     "Explanatory", "Explanatory")
+
+FieldDefinitions <- data.frame(Field, VariableType, VariableMeasure, Description)
+FieldDefinitions %>% kable() %>% kable_styling()
+```
+
+#### Dependent Variable 
+
+```{r}
+FieldDefinitions %>% filter(VariableMeasure == "Response") %>% kable() %>% kable_styling()
+```
+
+#### Independent Variable
+
+```{r}
+FieldDefinitions %>% filter(VariableMeasure == "Independent") %>% kable() %>% kable_styling()
+```
+
+#### Objectives 
+
+The purpose of this study is to identify the relationship between the borrower's revolving line utilization rate (revol.util) and the interest rate of the loan (int.rate).
+
+##### Ho: There is no significant correlation between revol.util and int.rate.
+##### Ha: There is a significant correlation between revol.util and int.rate.
+
+#### Pre-process Data
+
+This process is to put raw data into a comprehensible format. Given that we cannot deal with raw data, it is also a crucial stage in data mining. Prior to using machine learning or data mining methods, the quality of the data should be evaluated.
+
+#### Clean Data
+
+```{r}
+plot_missing(data)
+```
+
+The plot's results demonstrate that the dataset contains no missing data.
+
+#### Exploratory Analysis
+
+This section helps to explore the dataset to understand the dataset before making any assumptions.
+
+#### Correlation Diagram
+
+A correlation matrix is a table showing the correlation coefficients between multiple variables. Each cell in the table represents the correlation between two variables. The correlation coefficient is a value between -1 and 1 that measures the strength and direction of the linear relationship between two variables. A correlation matrix can be used to identify which variables are highly correlated with one another.
+
+```{r}
+cor_mat <-
+  data %>% 
+  select(where(is.numeric), -c(purpose)) %>% 
+  cor(use = "pairwise.complete.obs") 
+
+corrplot(
+  title = "\n\nCorrelation Matrix",
+  cor_mat,
+  method = "number",
+  order = "alphabet",
+  type = "lower",
+  diag = FALSE,
+  number.cex = 0.7,
+  tl.cex = 0.8,
+  tl.col = "darkgreen",
+  addgrid.col = "gray")
+```
+
+#### Type Coversion
+
+```{r}
+data$purpose<-as.factor(data$purpose)
+data$int.rate<-as.numeric(data$int.rate)
+data$revol.util<-as.numeric(data$revol.util)
+# install.packages("magrittr")
+library(magrittr)
+library(dplyr)
+loanGraphPlotData <-data %>% select(revol.util,int.rate, purpose)
+head(loanGraphPlotData)
+```
+
+#### Box-plot
+
+The boxplot displays the distribution of the data for each "purpose" category and the relationship between the two variables, "revol.util" and "int.rate" within those categories. It gives an idea of the median, quartiles, minimum, and maximum values of the data for each category.
+
+```{r}
+ggplot(data=loanGraphPlotData, aes(x=revol.util, y=int.rate, fill=purpose)) +
+  geom_boxplot() +
+  ggtitle("Loan Purpose and Revolving Line Utilization Rate vs Interest Rate") 
+```
+
+These data points are known as outliers because they are much higher or lower than the average. They offer significant insight into the data's distribution and may flag any anomalies or outliers in the dataset.
+
+#### Removing outliers
+
+```{r}
+lower_limit <- quantile(loanGraphPlotData$int.rate, 0.05)
+upper_limit <- quantile(loanGraphPlotData$int.rate, 0.95)
+
+loanGraphPlotData_no_outliers <- subset(loanGraphPlotData, int.rate >= lower_limit & int.rate <= upper_limit)
+```
+
+```{r}
+ggplot(data=loanGraphPlotData_no_outliers, aes(x=revol.util, y=int.rate, fill=purpose)) +
+  geom_boxplot() +
+  ggtitle("Loan Purpose and Revolving Line Utilization Rate vs Interest Rate") 
+```
+
+According to the results, all purposes in each category have median values that are generally similar, with the exception of small business, which has a somewhat higher median value than the rest.
+
+#### Summary of dataset
+
+```{r}
+summary(loanGraphPlotData_no_outliers)
+dim(loanGraphPlotData_no_outliers) # display number of observations and variables 
+```
+
+The minimum revolving line utilisation rate is 0, the first quartile (25th percentile) is 23.8, the median (50th percentile) is 46.7, the mean is 47, the third quartile (75th percentile) is 70.5, and the maximum value is 108.8. The summary also highlights the distribution of loans' intended uses, with debt consolidation ranking first among them, followed by credit cards and all other. Furthermore, the minimum interest rate is 0.0774, the first quartile is 0.1062, the median is 0.1221, the mean is 0.1215, the third quartile is 0.138, and the highest is 0.167.
+
+#### Split dataset into the Training set and Test set
+
+Divide a dataset into train and test sets to see how effectively our machine learning model works.
+
+```{r}
+split <- sample.split(loanGraphPlotData_no_outliers, SplitRatio = 0.8)  # split data into ratio of 8:2 
+training_set <- subset(loanGraphPlotData_no_outliers, split == "TRUE")
+test_set <- subset(loanGraphPlotData_no_outliers, split == "FALSE")
+```
+
+#### Scale data 
+
+Scaling the data is one of the pre-processing steps used in machine learning algorithms on the data set, which makes it easier for the model to understand and learn about the problem.
+
+```{r}
+training_set.scale <- scale(select(training_set, -purpose))
+test_set.scale <- scale(select(test_set, -purpose))
+```
+
+#### Descriptive Analysis
+
+Using historical data, analytical modeling, data mining techniques, and machine learning, predictive analytics is a subset of new insights that forecasts probable outcomes.
+
+#### 1. Principal component analyse (PCA)
+
+A type of unsupervised statistical learning is this algorithm. It offers data visualization, dimension reduction techniques, and, most importantly, it offers data pre-processing techniques before applying another methodology.
+
+```{r}
+data.table <- round(cor(training_set.scale), 3)
+head(data.table)
+
+data.pca <- prcomp(training_set.scale, center = TRUE,scale. = TRUE)
+
+ggbiplot(data.pca, scale=0)
+biplot(data.pca, scale = 0)
+```
+
+####  2. Pearson correlation coefficient
+
+The Pearson correlation coefficient ranges from -1 to 1, where -1 represents a perfect negative correlation, 0 represents no correlation, and 1 represents a perfect positive correlation.
+
+```{r}
+training_set.scale <- as.data.frame(training_set.scale)
+cor.test(training_set.scale$revol.util, training_set.scale$int.rate, method = "pearson")
+```
+
+The two variables have a moderately positive correlation, as indicated by the correlation coefficient (cor), which is at 0.4458614. This association is statistically significant at a very high level, according to the t-value of 38.085 and the p-value of 0.00000000000000022. This is also supported by the 95% confidence interval, which has a range of 0.4269395 to 0.4679330. 
+
+#### 3. Linear Regression
+
+This method is a statistical approach that forecasts the result of a dependent variable using one independent variable. Using this method, we may calculate the model's variance as well as the proportional contributions of independent variable to the overall variance.
+
+```{r}
+ggplot(data=loanGraphPlotData_no_outliers, aes(x=revol.util, y=int.rate)) + geom_point() + geom_smooth(method = "lm") + ggtitle("Relationship between Revolving Line Utilization Rate and Interest Rate") + xlab("Revolving Line Utilization Rate") + ylab("Interest Rate")
+```
+
+```{r}
+lm.fit =lm(int.rate~.,data= loanGraphPlotData_no_outliers[1:2])
+summary(lm.fit)
+
+hist(resid(lm.fit), prob = TRUE)
+```
+
+A measurement of how well the model fits the data is the multiple R-squared value. With an R-squared value of 0.2005, the model can account for 20% of the variability in interest rates. The overall significance of the model is evaluated using the F-statistic and its corresponding p-value. The model fits the data well, as shown by the p-value of less than 0.05. However, the residuals appear to be fairly regularly distributed based on the statistics for the residuals that are presented in the output. The residuals have a median value of 0.000349, a range of -0.014488 to 0.062030, and a minimum value of -0.057834. Furthermore, the residual standard error is 0.0201 on 8770 degrees of freedom, which is negligibly low and suggests that the residuals are reasonably near to the fitted values. Since the residuals are roughly symmetrical, the residuals' histogram appears to be somewhat bell-shaped.
+
+#### Conclusion
+
+The residual standard error being small and the R-squared value being high are both signs of a good model fit. The low p-value which is almost 0 for the F-statistic also suggests that the model is a good fit for the data. However, the relatively low adjusted R-squared value suggests that the model does not explain a large proportion of the variance in the response variable.
+
+##### Ho: There is no significant correlation between revol.util and int.rate. (reject)
+##### Ha: There is a significant correlation between revol.util and int.rate.
+
